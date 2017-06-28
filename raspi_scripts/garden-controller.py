@@ -36,7 +36,7 @@ watering_job_pour= float(Config.get('Garden-Controller', 'watering-pour'))
 
 def checkSensor(sensor):
     #read sensor
-    measure= grovepi.readAnalog(sensor.pin)
+    measure= grovepi.analogRead(sensor.pin)
     print "Pin: {}, Measure: {}, Threshold: {}".format(sensor.pin, measure, sensor.threshold)
 
     if measure <= sensor.threshold :

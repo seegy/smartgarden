@@ -17,7 +17,7 @@ relay_pin = int(Config.get('Watering-Server', 'relay-pin'))
 server_port = int(Config.get('Watering-Server', 'port'))
 
 grovepi.pinMode(relay_pin, "OUTPUT")
-grovepi.writeDigital(relay_pin, 0)
+grovepi.digitalWrite(relay_pin, 0)
 
 class FloatConverter(BaseFloatConverter):
     regex = r'-?\d+(\.\d+)?'
@@ -40,22 +40,22 @@ def pour(intervals):
 
     for i in range(0, full_intervals):
         print('start watering')
-        grovepi.writeDigital(relay_pin, 1)
+        grovepi.digitalWrite(relay_pin, 1)
         time.sleep(pour_interval_time)
 
         print('stop watering')
-        grovepi.writeDigital(relay_pin, 0)
+        grovepi.digitalWrite(relay_pin, 0)
         time.sleep(pour_pause_time)
 
     rest_interval= intervals - full_intervals
 
     if(rest_interval > 0):
         print('start watering')
-        grovepi.writeDigital(relay_pin, 1)
+        grovepi.digitalWrite(relay_pin, 1)
         time.sleep(rest_interval * pour_interval_time)
 
         print('stop watering')
-        grovepi.writeDigital(relay_pin, 0)
+        grovepi.digitalWrite(relay_pin, 0)
         time.sleep(pour_pause_time)
 
 
