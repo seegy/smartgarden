@@ -1,0 +1,37 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- NOTE: EditTextPreference accepts EditText attributes. -->
+    <!-- NOTE: EditTextPreference's summary should be set to its value by the activity code. -->
+
+    <!-- NOTE: Hide buttons to simplify the UI. Users can touch outside the dialog to
+         dismiss it. -->
+    <!-- NOTE: ListPreference's summary should be set to its value by the activity code. -->
+    <PreferenceCategory android:title="@string/pref_title_watering_server">
+
+        <EditTextPreference
+            android:defaultValue="@string/pref_title_watering_server_host_default"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/pref_title_watering_server_host"
+            android:key="host_pref"
+            android:maxLines="1"
+            android:elevation="16dp" />
+        <EditTextPreference
+            android:defaultValue="@string/pref_title_watering_server_port_default"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/pref_title_watering_server_port"
+            android:key="port_pref" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_title_behaviors">
+        <EditTextPreference
+            android:defaultValue="@string/pref_title_behaviors_interval_default"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/pref_title_behaviors_interval"
+            android:key="interval_pref" />
+    </PreferenceCategory>
+
+</PreferenceScreen>
