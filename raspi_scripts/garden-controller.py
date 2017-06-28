@@ -4,6 +4,7 @@ import ConfigParser
 from random import randint
 import requests
 import subprocess
+import grovepi
 
 # class for sensors
 class HumiditySensor:
@@ -33,10 +34,9 @@ watering_job_scheduler= Config.get('Garden-Controller', 'watering-scheduler')
 watering_job_pour= float(Config.get('Garden-Controller', 'watering-pour'))
 
 
-def checkSensor(sensor): #TODO dummy
+def checkSensor(sensor):
     #read sensor
-    #todo
-    measure= randint(0,950)
+    measure= grovepi.readAnalog(sensor.pin)
     print "Pin: {}, Measure: {}, Threshold: {}".format(sensor.pin, measure, sensor.threshold)
 
     if measure <= sensor.threshold :

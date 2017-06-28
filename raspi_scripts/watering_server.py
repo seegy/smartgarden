@@ -4,6 +4,8 @@ from werkzeug.routing import FloatConverter as BaseFloatConverter
 import time
 import threading
 import ConfigParser
+import grovepi
+
 
 
 Config = ConfigParser.ConfigParser()
@@ -12,8 +14,10 @@ Config.read('./config.ini')
 pour_interval_time= int(Config.get('Watering-Server', 'pour_interval_time'))   # approx one minute in seconds
 pour_pause_time= int(Config.get('Watering-Server', 'pour_pause_time'))
 relay_pin = int(Config.get('Watering-Server', 'relay-pin'))
-
 server_port = int(Config.get('Watering-Server', 'port'))
+
+grovepi.pinMode(relay_pin, "OUTPUT")
+grovepi.writeDigital(relay_pin, 0)
 
 class FloatConverter(BaseFloatConverter):
     regex = r'-?\d+(\.\d+)?'
@@ -36,22 +40,22 @@ def pour(intervals):
 
     for i in range(0, full_intervals):
         print('start watering')
-        #todo
+        grovepi.writeDigital(relay_pin, 1)
         time.sleep(pour_interval_time)
 
         print('stop watering')
-        #todo
+        grovepi.writeDigital(relay_pin, 0)
         time.sleep(pour_pause_time)
 
     rest_interval= intervals - full_intervals
 
     if(rest_interval > 0):
         print('start watering')
-        #todo
+        grovepi.writeDigital(relay_pin, 1)
         time.sleep(rest_interval * pour_interval_time)
 
         print('stop watering')
-        #todo
+        grovepi.writeDigital(relay_pin, 0)
         time.sleep(pour_pause_time)
 
 
