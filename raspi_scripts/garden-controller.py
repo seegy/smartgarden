@@ -6,6 +6,8 @@ import requests
 import subprocess
 import grovepi
 import sys, os
+import logging
+from logging.handlers import RotatingFileHandler
 
 
 pathname = os.path.dirname(sys.argv[0])
@@ -22,6 +24,20 @@ class HumiditySensor:
 
 Config = ConfigParser.ConfigParser()
 Config.read(pathname + '/config.ini')
+
+# Logger
+app_name= Config.get('Garden-Controller', 'app-name')
+log_level= Config.get('Log', 'level')
+log_file= Config.get('Log', 'file')
+log_format= '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+logging.basicConfig(filename=log_file,level=logging.getLevelName(log_level))
+logger = logging.getLogger(app_name)
+fh = RotatingFileHandler(log_file, maxBytes=10000000, backupCount=5)
+formatter = logging.Formatter(log_format)
+fh.setFormatter(formatter)
+fh.setLevel(logging.getLevelName(log_level))
+logger.addHandler(fh)
 
 # read sensors from config
 sensors = []
@@ -58,7 +74,7 @@ def check_sensor(sensor):
     final_measure = measure_sum / measure_count
     humidity = measure_to_humidity(final_measure)
 
-    print "Pin: {}, Measure: {}, Threshold: {}".format(sensor.pin, humidity, sensor.threshold)
+    logger.info("Pin: {}, Measure: {}, Threshold: {}".format(sensor.pin, humidity, sensor.threshold))
 
     if humidity <= sensor.threshold:
         return True
@@ -86,24 +102,22 @@ def watering():
     yes_count = len([e for e in decisions if e])
 
     if yes_count > len(job_sensors) / 2:
-        print 'Yes! Water it!'
+        logger.info('Yes! Water it!')
 
         try:
             requests.put('http://' + watering_url + ':' + watering_port + '/pour/' + str(watering_job_pour))
-            print 'Send watering request.'
+            logger.info('Send watering request.')
         except requests.exceptions.ConnectionError:
-            print "No watering server! restart watering server..."
+            logger.warning("No watering server! restart watering server...")
             start_watering_server()
             time.sleep(1)
             watering()
 
     else:
-        print 'No! No water!'
+        logger.info('No! No water!')
 
 
 if __name__ == '__main__':
-
-    time.sleep(10)
 
     watering_server_available = False
 
@@ -116,11 +130,11 @@ if __name__ == '__main__':
         pass
 
     if not watering_server_available:
-        print "No watering server found! Starting watering server..."
+        logger.warning( "No watering server found! Starting watering server...")
         start_watering_server()
 
     crython.start()
 
-    print "Garden Controller started up!"
+    logger.info("Garden Controller started up!")
     while True:
         time.sleep(1)

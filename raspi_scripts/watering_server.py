@@ -6,6 +6,8 @@ import threading
 import ConfigParser
 import grovepi
 import sys, os
+import logging
+from logging.handlers import RotatingFileHandler
 
 
 pathname = os.path.dirname(sys.argv[0])
@@ -15,6 +17,20 @@ if not pathname:
 
 Config = ConfigParser.ConfigParser()
 Config.read(pathname + '/config.ini')
+
+#Logger
+app_name= Config.get('Watering-Server', 'app-name')
+log_level= Config.get('Log', 'level')
+log_file= Config.get('Log', 'file')
+log_format= '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+logging.basicConfig(filename=log_file,level=logging.getLevelName(log_level))
+logger = logging.getLogger(app_name)
+fh = RotatingFileHandler(log_file, maxBytes=10000000, backupCount=5)
+formatter = logging.Formatter(log_format)
+fh.setFormatter(formatter)
+fh.setLevel(logging.getLevelName(log_level))
+logger.addHandler(fh)
 
 pour_interval_time= int(Config.get('Watering-Server', 'pour_interval_time'))   # approx one minute in seconds
 pour_pause_time= int(Config.get('Watering-Server', 'pour_pause_time'))
@@ -44,29 +60,29 @@ def pour(intervals):
     full_intervals=int(intervals)
 
     for i in range(0, full_intervals):
-        print('start watering')
+        logger.info('start watering')
         grovepi.digitalWrite(relay_pin, 1)
         time.sleep(pour_interval_time)
 
-        print('stop watering')
+        logger.info('stop watering')
         grovepi.digitalWrite(relay_pin, 0)
         time.sleep(pour_pause_time)
 
     rest_interval= intervals - full_intervals
 
     if rest_interval > 0:
-        print('start watering')
+        logger.info('start watering')
         grovepi.digitalWrite(relay_pin, 1)
         time.sleep(rest_interval * pour_interval_time)
 
-        print('stop watering')
+        logger.info('stop watering')
         grovepi.digitalWrite(relay_pin, 0)
         time.sleep(pour_pause_time)
 
 
 app = Flask(__name__)
 app.url_map.converters['float'] = FloatConverter # set floatconverter
-
+app.logger.addHandler(fh)
 
 @app.route('/status', methods=['GET'])
 def status_request():
@@ -80,4 +96,5 @@ def pour_request(interval_count):
 
 
 if __name__ == '__main__':
+    logger.info('starting server...')
     app.run(host='0.0.0.0', port=server_port)
