@@ -5,11 +5,16 @@ import time
 import threading
 import ConfigParser
 import grovepi
+import sys, os
 
 
+pathname = os.path.dirname(sys.argv[0])
+
+if not pathname:
+    pathname = "."
 
 Config = ConfigParser.ConfigParser()
-Config.read('./config.ini')
+Config.read(pathname + '/config.ini')
 
 pour_interval_time= int(Config.get('Watering-Server', 'pour_interval_time'))   # approx one minute in seconds
 pour_pause_time= int(Config.get('Watering-Server', 'pour_pause_time'))
@@ -18,6 +23,7 @@ server_port = int(Config.get('Watering-Server', 'port'))
 
 grovepi.pinMode(relay_pin, "OUTPUT")
 grovepi.digitalWrite(relay_pin, 0)
+
 
 class FloatConverter(BaseFloatConverter):
     regex = r'-?\d+(\.\d+)?'
@@ -31,7 +37,6 @@ def synchronized(func):
             return func(*args, **kws)
 
     return synced_func
-
 
 
 @synchronized
@@ -49,7 +54,7 @@ def pour(intervals):
 
     rest_interval= intervals - full_intervals
 
-    if(rest_interval > 0):
+    if rest_interval > 0:
         print('start watering')
         grovepi.digitalWrite(relay_pin, 1)
         time.sleep(rest_interval * pour_interval_time)
@@ -62,9 +67,11 @@ def pour(intervals):
 app = Flask(__name__)
 app.url_map.converters['float'] = FloatConverter # set floatconverter
 
+
 @app.route('/status', methods=['GET'])
 def status_request():
     return "OK!"
+
 
 @app.route('/pour/<float:interval_count>', methods=['PUT'])
 def pour_request(interval_count):
