@@ -19,7 +19,7 @@ watering-pour: 2.0
 measure-count: 5
 
 upper-measure-limit: 700
-lower-measure-limit: 100
+lower-measure-limit: 70
 
 # for DEV
 # every 5 seconds
