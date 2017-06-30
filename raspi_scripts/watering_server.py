@@ -1,42 +1,18 @@
 #!flask/bin/python
 from flask import Flask
 from werkzeug.routing import FloatConverter as BaseFloatConverter
-import time
 import threading
-import ConfigParser
 import grovepi
-import sys, os
-import logging
-from logging.handlers import RotatingFileHandler
 
+from shared import *
 
-pathname = os.path.dirname(sys.argv[0])
-
-if not pathname:
-    pathname = "."
-
-Config = ConfigParser.ConfigParser()
-Config.read(pathname + '/config.ini')
-
-#Logger
-app_name= Config.get('Watering-Server', 'app-name')
-log_level= Config.get('Log', 'level')
-log_file= Config.get('Log', 'file')
-log_format= '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-
-logging.basicConfig(filename=log_file,level=logging.getLevelName(log_level))
-logger = logging.getLogger(app_name)
-fh = RotatingFileHandler(log_file, maxBytes=10000000, backupCount=5)
-formatter = logging.Formatter(log_format)
-fh.setFormatter(formatter)
-fh.setLevel(logging.getLevelName(log_level))
-logger.addHandler(fh)
-
+# general configs
 pour_interval_time= int(Config.get('Watering-Server', 'pour_interval_time'))   # approx one minute in seconds
 pour_pause_time= int(Config.get('Watering-Server', 'pour_pause_time'))
 relay_pin = int(Config.get('Watering-Server', 'relay-pin'))
 server_port = int(Config.get('Watering-Server', 'port'))
 
+# configure pins
 grovepi.pinMode(relay_pin, "OUTPUT")
 grovepi.digitalWrite(relay_pin, 0)
 
@@ -79,10 +55,13 @@ def pour(intervals):
         grovepi.digitalWrite(relay_pin, 0)
         time.sleep(pour_pause_time)
 
+    tweet("I poured successfully for {} intervals.".format(intervals))
+
 
 app = Flask(__name__)
 app.url_map.converters['float'] = FloatConverter # set floatconverter
 app.logger.addHandler(fh)
+
 
 @app.route('/status', methods=['GET'])
 def status_request():

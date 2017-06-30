@@ -1,19 +1,11 @@
 import crython
-import time
-import ConfigParser
 from random import randint
 import requests
 import subprocess
 import grovepi
-import sys, os
-import logging
-from logging.handlers import RotatingFileHandler
 
+from shared import *
 
-pathname = os.path.dirname(sys.argv[0])
-
-if not pathname:
-    pathname = "."
 
 # class for sensors
 class HumiditySensor:
@@ -21,23 +13,6 @@ class HumiditySensor:
         self.pin = pin
         self.threshold = threshold
 
-
-Config = ConfigParser.ConfigParser()
-Config.read(pathname + '/config.ini')
-
-# Logger
-app_name= Config.get('Garden-Controller', 'app-name')
-log_level= Config.get('Log', 'level')
-log_file= Config.get('Log', 'file')
-log_format= '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-
-logging.basicConfig(filename=log_file,level=logging.getLevelName(log_level))
-logger = logging.getLogger(app_name)
-fh = RotatingFileHandler(log_file, maxBytes=10000000, backupCount=5)
-formatter = logging.Formatter(log_format)
-fh.setFormatter(formatter)
-fh.setLevel(logging.getLevelName(log_level))
-logger.addHandler(fh)
 
 # read sensors from config
 sensors = []
@@ -59,12 +34,16 @@ upper_measure_limit = int(Config.get('Garden-Controller', 'upper-measure-limit')
 lower_measure_limit = int(Config.get('Garden-Controller', 'lower-measure-limit'))
 
 
+tweet_string= ''
+
+
 def measure_to_humidity(measure):
     return (float(measure) - lower_measure_limit) / (upper_measure_limit - lower_measure_limit) * 100
 
 
 def check_sensor(sensor):
     measure_sum = 0
+    global tweet_string
 
     for x in range(0, measure_count):
         # read sensor
@@ -74,7 +53,9 @@ def check_sensor(sensor):
     final_measure = measure_sum / measure_count
     humidity = measure_to_humidity(final_measure)
 
-    logger.info("Pin: {}, Measure: {}, Threshold: {}".format(sensor.pin, humidity, sensor.threshold))
+    out_string = "Pin: {}, Measure: {}, Threshold: {}".format(sensor.pin, humidity, sensor.threshold)
+    logger.info(out_string)
+    tweet_string += out_string + '\n'
 
     if humidity <= sensor.threshold:
         return True
@@ -86,9 +67,13 @@ def start_watering_server():
     result = subprocess.Popen(["python", pathname + "/watering_server.py"])
 
 
+
 @crython.job(expr=watering_job_scheduler)
 def watering():
     job_sensors = sensors[:]
+    global tweet_string
+
+    tweet_string= 'I measured:\n'
 
     # make sure there is a quorum
     if len(job_sensors) % 2 == 0:
@@ -103,6 +88,7 @@ def watering():
 
     if yes_count > len(job_sensors) / 2:
         logger.info('Yes! Water it!')
+        tweet_string += 'I\'ll pour!'
 
         try:
             requests.put('http://' + watering_url + ':' + watering_port + '/pour/' + str(watering_job_pour))
@@ -115,9 +101,14 @@ def watering():
 
     else:
         logger.info('No! No water!')
+        tweet_string += 'I\'ll not pour!'
+
+    tweet(tweet_string)
 
 
 if __name__ == '__main__':
+
+    time.sleep(10)
 
     watering_server_available = False
 
@@ -136,5 +127,6 @@ if __name__ == '__main__':
     crython.start()
 
     logger.info("Garden Controller started up!")
+    tweet("I'm up now!")
     while True:
         time.sleep(1)
