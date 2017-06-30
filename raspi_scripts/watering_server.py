@@ -7,8 +7,6 @@ import grovepi
 from shared import *
 
 # general configs
-pour_interval_time= int(Config.get('Watering-Server', 'pour_interval_time'))   # approx one minute in seconds
-pour_pause_time= int(Config.get('Watering-Server', 'pour_pause_time'))
 relay_pin = int(Config.get('Watering-Server', 'relay-pin'))
 server_port = int(Config.get('Watering-Server', 'port'))
 
@@ -34,6 +32,9 @@ def synchronized(func):
 @synchronized
 def pour(intervals):
     full_intervals=int(intervals)
+
+    pour_interval_time= int(Config.get('Watering-Server', 'pour_interval_time'))
+    pour_pause_time= int(Config.get('Watering-Server', 'pour_pause_time'))
 
     for i in range(0, full_intervals):
         logger.info('start watering')

@@ -27,23 +27,22 @@ watering_port = Config.get('Watering-Server', 'port')
 
 # own stuff
 watering_job_scheduler = Config.get('Garden-Controller', 'watering-scheduler')
-watering_job_pour = float(Config.get('Garden-Controller', 'watering-pour'))
-
-measure_count = int(Config.get('Garden-Controller', 'measure-count'))
-upper_measure_limit = int(Config.get('Garden-Controller', 'upper-measure-limit'))
-lower_measure_limit = int(Config.get('Garden-Controller', 'lower-measure-limit'))
 
 
 tweet_string= ''
 
 
 def measure_to_humidity(measure):
+    upper_measure_limit = int(Config.get('Garden-Controller', 'upper-measure-limit'))
+    lower_measure_limit = int(Config.get('Garden-Controller', 'lower-measure-limit'))
     return (float(measure) - lower_measure_limit) / (upper_measure_limit - lower_measure_limit) * 100
 
 
 def check_sensor(sensor):
     measure_sum = 0
     global tweet_string
+
+    measure_count = int(Config.get('Garden-Controller', 'measure-count'))
 
     for x in range(0, measure_count):
         # read sensor
@@ -65,7 +64,6 @@ def check_sensor(sensor):
 
 def start_watering_server():
     result = subprocess.Popen(["python", pathname + "/watering_server.py"])
-
 
 
 @crython.job(expr=watering_job_scheduler)
@@ -91,7 +89,7 @@ def watering():
         tweet_string += 'I\'ll pour!'
 
         try:
-            requests.put('http://' + watering_url + ':' + watering_port + '/pour/' + str(watering_job_pour))
+            requests.put('http://' + watering_url + ':' + watering_port + '/pour/' + Config.get('Garden-Controller', 'watering-pour'))
             logger.info('Send watering request.')
         except requests.exceptions.ConnectionError:
             logger.warning("No watering server! restart watering server...")
@@ -107,7 +105,6 @@ def watering():
 
 
 if __name__ == '__main__':
-
     time.sleep(10)
 
     watering_server_available = False

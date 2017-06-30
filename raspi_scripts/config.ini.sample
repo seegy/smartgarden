@@ -15,7 +15,7 @@ port = analog
 
 [Garden-Controller]
 app-name: Garden-Controller
-watering-pour: 1.5
+watering-pour: 2.0
 measure-count: 5
 
 upper-measure-limit: 700
@@ -42,7 +42,7 @@ relay-pin: 2
 
 # for PROD
 pour_interval_time: 60
-pour_pause_time: 5
+pour_pause_time: 2
 
 
 [Log]
