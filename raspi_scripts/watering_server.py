@@ -33,6 +33,8 @@ def synchronized(func):
 def pour(intervals):
     full_intervals=int(intervals)
 
+    reload_config()
+
     pour_interval_time= int(Config.get('Watering-Server', 'pour_interval_time'))
     pour_pause_time= int(Config.get('Watering-Server', 'pour_pause_time'))
 

@@ -14,9 +14,6 @@ class HumiditySensor:
         self.threshold = threshold
 
 
-# read sensors from config
-sensors = []
-
 # watering server connection
 watering_url = Config.get('Watering-Server', 'url')
 watering_port = Config.get('Watering-Server', 'port')
@@ -28,13 +25,15 @@ watering_job_scheduler = Config.get('Garden-Controller', 'watering-scheduler')
 tweet_string= ''
 
 
-def reset_sensors():
-    global sensors
+# read sensors from config
+def get_sensors():
     sensors = []
+
     for each_section in Config.sections():
         if each_section.startswith('Humidity-Sensor'):
             sensors.append(HumiditySensor(int(Config.get(each_section, 'pin')),
                                           int(Config.get(each_section, 'threshold'))))
+    return sensors
 
 
 def measure_to_humidity(measure):
@@ -57,7 +56,7 @@ def check_sensor(sensor):
     final_measure = measure_sum / measure_count
     humidity = measure_to_humidity(final_measure)
 
-    out_string = "P: {}, M: {:.1f}, T: {}".format(sensor.pin, humidity, sensor.threshold)
+    out_string = "P{}, M: {:.1f}%, T: {}%".format(sensor.pin, humidity, sensor.threshold)
     logger.info(out_string)
     tweet_string += out_string + '\n'
 
@@ -74,12 +73,12 @@ def start_watering_server():
 @crython.job(expr=watering_job_scheduler)
 def watering():
     global tweet_string
-
-    reset_sensors()
-
-    job_sensors = sensors[:]
-
     tweet_string= 'I measured:\n'
+
+    reload_config()
+
+    sensors = get_sensors()
+    job_sensors = sensors[:]
 
     # make sure there is a quorum
     if len(job_sensors) % 2 == 0:

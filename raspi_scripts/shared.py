@@ -14,11 +14,15 @@ if not pathname:
 
 # load config
 Config = ConfigParser.ConfigParser()
-if os.path.isfile(pathname + '/config.ini'):
-    Config.read(pathname + '/config.ini')
-else:
-    Config.read(pathname + '/config.ini.sample')
 
+
+def reload_config():
+    if os.path.isfile(pathname + '/config.ini'):
+        Config.read(pathname + '/config.ini')
+    else:
+        Config.read(pathname + '/config.ini.sample')
+
+reload_config()
 
 # Logger
 app_name= Config.get('Watering-Server', 'app-name')
