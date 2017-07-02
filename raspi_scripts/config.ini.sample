@@ -13,21 +13,29 @@ pin = 2
 threshold = 50
 port = analog
 
+
 [Garden-Controller]
 app-name: Garden-Controller
-watering-pour: 2.0
 measure-count: 5
-
-upper-measure-limit: 700
+upper-measure-limit: 750
 lower-measure-limit: 70
 
+[Morning-Watering-Schedule]
+watering-pour: 3.0
 # for DEV
 # every 5 seconds
 #watering-scheduler = */5 * * * * * *
+sensor-threshold-factor = 1.0
 
 # for PROD
 # every 30 minutes in the morning and evening
-watering-scheduler = 0 0,30 6-10,18-21 * * * *
+watering-scheduler = 0 0,30 6-10 * * * *
+
+
+[Evening-Watering-Schedule]
+watering-pour: 1.0
+watering-scheduler = 0 0,30 18-21 * * * *
+sensor-threshold-factor = 0.8
 
 
 [Watering-Server]

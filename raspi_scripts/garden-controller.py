@@ -18,8 +18,10 @@ class HumiditySensor:
 watering_url = Config.get('Watering-Server', 'url')
 watering_port = Config.get('Watering-Server', 'port')
 
-# own stuff
-watering_job_scheduler = Config.get('Garden-Controller', 'watering-scheduler')
+morning_watering_job_scheduler = Config.get('Morning-Watering-Schedule', 'watering-scheduler')
+evening_watering_job_scheduler = Config.get('Evening-Watering-Schedule', 'watering-scheduler')
+
+
 
 # global tweet string for multi function level appending
 tweet_string= ''
@@ -42,10 +44,9 @@ def measure_to_humidity(measure):
     return (float(measure) - lower_measure_limit) / (upper_measure_limit - lower_measure_limit) * 100
 
 
-def check_sensor(sensor):
+def check_sensor(sensor, threshold_factor):
     measure_sum = 0
     global tweet_string
-
     measure_count = int(Config.get('Garden-Controller', 'measure-count'))
 
     for x in range(0, measure_count):
@@ -56,11 +57,11 @@ def check_sensor(sensor):
     final_measure = measure_sum / measure_count
     humidity = measure_to_humidity(final_measure)
 
-    out_string = "P{}, M: {:.1f}%, T: {}%".format(sensor.pin, humidity, sensor.threshold)
+    threshold = threshold_factor * float(sensor.threshold)
+    out_string = "P{}, M: {:.1f}%, T: {:.1f}%".format(sensor.pin, humidity, threshold)
     logger.info(out_string)
     tweet_string += out_string + '\n'
-
-    if humidity <= sensor.threshold:
+    if humidity <= threshold:
         return True
 
     return False
@@ -70,12 +71,10 @@ def start_watering_server():
     result = subprocess.Popen(["python", pathname + "/watering_server.py"])
 
 
-@crython.job(expr=watering_job_scheduler)
-def watering():
+
+def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0):
     global tweet_string
     tweet_string= 'I measured:\n'
-
-    reload_config()
 
     sensors = get_sensors()
     job_sensors = sensors[:]
@@ -87,7 +86,7 @@ def watering():
     # check sensors
     decisions = []
     for sensor in job_sensors:
-        decisions.append(check_sensor(sensor))
+        decisions.append(check_sensor(sensor, sensor_threshold_factor))
 
     yes_count = len([e for e in decisions if e])
 
@@ -96,7 +95,7 @@ def watering():
         tweet_string += 'I\'ll pour!'
 
         try:
-            requests.put('http://' + watering_url + ':' + watering_port + '/pour/' + Config.get('Garden-Controller', 'watering-pour'))
+            requests.put('http://' + watering_url + ':' + watering_port + '/pour/' + pouring_intervals)
             logger.info('Send watering request.')
         except requests.exceptions.ConnectionError:
             logger.warning("No watering server! restart watering server...")
@@ -109,6 +108,23 @@ def watering():
         tweet_string += 'I\'ll not pour!'
 
     tweet(tweet_string)
+
+
+
+@crython.job(expr=morning_watering_job_scheduler)
+def morning_schedule():
+    reload_config()
+    pour_intervals= Config.get('Morning-Watering-Schedule', 'watering-pour')
+    sensor_threshold_factor = float(Config.get('Morning-Watering-Schedule', 'sensor-threshold-factor'))
+    measure_and_watering(pour_intervals, sensor_threshold_factor)
+
+
+@crython.job(expr=evening_watering_job_scheduler)
+def evening_schedule():
+    reload_config()
+    pour_intervals= Config.get('Evening-Watering-Schedule', 'watering-pour')
+    sensor_threshold_factor = float(Config.get('Evening-Watering-Schedule', 'sensor-threshold-factor'))
+    measure_and_watering(pour_intervals, sensor_threshold_factor)
 
 
 if __name__ == '__main__':
@@ -130,7 +146,7 @@ if __name__ == '__main__':
 
     crython.start()
 
-    logger.info("Garden Controller started up!")
+    logger.info("Garden Controller started up! Morning schedule: {}. Evening schedule: {}".format(morning_watering_job_scheduler, evening_watering_job_scheduler))
     tweet("I'm up now!")
     while True:
         time.sleep(1)
