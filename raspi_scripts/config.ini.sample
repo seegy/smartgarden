@@ -19,6 +19,7 @@ app-name: Garden-Controller
 measure-count: 5
 upper-measure-limit: 750
 lower-measure-limit: 70
+status-schedule: 0 0 11-17 * * * *
 
 [Morning-Watering-Schedule]
 watering-pour: 3.0
@@ -31,6 +32,10 @@ sensor-threshold-factor = 1.0
 # every 30 minutes in the morning and evening
 watering-scheduler = 0 0,30 6-10 * * * *
 
+[Morning-Support-Watering-Schedule]
+watering-pour: 0.5
+watering-scheduler = 0 0,30 7-9 * * * *
+sensor-threshold-factor = 0.9
 
 [Evening-Watering-Schedule]
 watering-pour: 1.0
@@ -65,3 +70,17 @@ enable: false
 #CONSUMER_SECRET: '1234abcd...'#keep the quotes, replace this with your consumer secret key
 #ACCESS_KEY: '1234abcd...'#keep the quotes, replace this with your access token
 #ACCESS_SECRET: '1234abcd...'#keep the quotes, replace this with your access token secret
+
+[OpenWeatherMap]
+enable: false
+#TOKEN: '1234abcd...'#keep the quotes, replace this with your consumer key
+#location: 'Berlin,de'
+lower_env_temp_limit: 10.0
+upper_env_temp_limit: 35.0
+max_intervals: 3.5
+min_intervals: 1.0
+rain_pour_deduction_limit: -1.0
+upper_env_rain_limit: 20
+lower_env_rain_limit: 1.5
+upper_hum_measure_limit: 20
+lower_hum_measure_interval_factor: 0.6
