@@ -16,7 +16,8 @@ port = analog
 
 [Garden-Controller]
 app-name: Garden-Controller
-measure-count: 5
+measure-count: 50
+measure-sleeptime: 0.01
 upper-measure-limit: 750
 lower-measure-limit: 70
 status-schedule: 0 0 11-17 * * * *
@@ -76,11 +77,12 @@ enable: false
 #TOKEN: '1234abcd...'#keep the quotes, replace this with your consumer key
 #location: 'Berlin,de'
 lower_env_temp_limit: 10.0
-upper_env_temp_limit: 35.0
-max_intervals: 3.5
-min_intervals: 1.0
+upper_env_temp_limit: 40.0
+initial_value: 1.5
+max_intervals: 4.0
+min_intervals: 1.2
 rain_pour_deduction_limit: -1.0
 upper_env_rain_limit: 20
 lower_env_rain_limit: 1.5
-upper_hum_measure_limit: 20
-lower_hum_measure_interval_factor: 0.6
+upper_hum_measure_limit: 70
+lower_hum_measure_interval_factor: 0.4

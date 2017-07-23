@@ -107,12 +107,13 @@ def check_sensor(sensor, threshold_factor):
     measure_sum = 0
     global tweet_string
     measure_count = int(Config.get('Garden-Controller', 'measure-count'))
+    measure_sleeptime = float(Config.get('Garden-Controller', 'measure-sleeptime'))
 
     for x in range(0, measure_count):
 
         # wait between 2 measures
         if x > 0:
-            time.sleep(0.1)
+            time.sleep(measure_sleeptime)
 
         # read sensor
 
@@ -173,7 +174,7 @@ def get_interval_advice(measures, or_pouring):
             temp = weather.get_temperature('celsius')['max']
             rain = weather.get_rain()
 
-            interval = 0.0
+            interval = float(Config.get('OpenWeatherMap', 'initial_value'))
             interval += get_temperature_interval_advice(temp)
             interval += get_rain_interval_advice(rain)
 
@@ -195,6 +196,9 @@ def start_watering_server():
 
 
 def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0, with_advice=False):
+
+    pouring_intervals = float(pouring_intervals)
+
     global tweet_string
     tweet_string= 'I measured:\n'
 
@@ -208,7 +212,7 @@ def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0, with_ad
     # check sensors
     measures = []
     for sensor in job_sensors:
-        d= check_sensor(sensor, sensor_threshold_factor)
+        d = check_sensor(sensor, sensor_threshold_factor)
         measures.append(d)
 
     yes_count = len([torf for torf, _, _ in measures if torf])
@@ -219,13 +223,12 @@ def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0, with_ad
         if with_advice:
             pouring_intervals = get_interval_advice(measures, pouring_intervals)
 
-        tweet_string += 'I\'ll pour!'
+        tweet_string += 'I\'ll pour for {:.1f} intervals!'.format(pouring_intervals)
 
         try:
             url = 'http://{}:{}/pour/{:.2f}'.format(watering_url, watering_port, pouring_intervals)
             if not DEBUG:
-                #requests.put(url)
-                print url
+                requests.put(url)
                 logger.info('Send watering request.')
             else:
                 print('request to: {}'.format(url))
@@ -248,26 +251,35 @@ def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0, with_ad
 
 @crython.job(expr=morning_watering_job_scheduler)
 def morning_schedule():
-    reload_config()
-    pour_intervals= Config.get('Morning-Watering-Schedule', 'watering-pour')
-    sensor_threshold_factor = float(Config.get('Morning-Watering-Schedule', 'sensor-threshold-factor'))
-    measure_and_watering(pour_intervals, sensor_threshold_factor, True)
+    try:
+        reload_config()
+        pour_intervals= Config.get('Morning-Watering-Schedule', 'watering-pour')
+        sensor_threshold_factor = float(Config.get('Morning-Watering-Schedule', 'sensor-threshold-factor'))
+        measure_and_watering(pour_intervals, sensor_threshold_factor, True)
+    except:
+        logger.error("Unexpected error:", sys.exc_info()[0])
 
 
 @crython.job(expr=evening_watering_job_scheduler)
 def evening_schedule():
-    reload_config()
-    pour_intervals= Config.get('Evening-Watering-Schedule', 'watering-pour')
-    sensor_threshold_factor = float(Config.get('Evening-Watering-Schedule', 'sensor-threshold-factor'))
-    measure_and_watering(pour_intervals, sensor_threshold_factor)
+    try:
+        reload_config()
+        pour_intervals= Config.get('Evening-Watering-Schedule', 'watering-pour')
+        sensor_threshold_factor = float(Config.get('Evening-Watering-Schedule', 'sensor-threshold-factor'))
+        measure_and_watering(pour_intervals, sensor_threshold_factor)
+    except:
+        logger.error("Unexpected error:", sys.exc_info()[0])
 
 
 @crython.job(expr=Config.get('Morning-Support-Watering-Schedule', 'watering-scheduler'))
 def morning_support_schedule():
-    reload_config()
-    pour_intervals= Config.get('Morning-Support-Watering-Schedule', 'watering-pour')
-    sensor_threshold_factor = float(Config.get('Morning-Support-Watering-Schedule', 'sensor-threshold-factor'))
-    measure_and_watering(pour_intervals, sensor_threshold_factor)
+    try:
+        reload_config()
+        pour_intervals= Config.get('Morning-Support-Watering-Schedule', 'watering-pour')
+        sensor_threshold_factor = float(Config.get('Morning-Support-Watering-Schedule', 'sensor-threshold-factor'))
+        measure_and_watering(pour_intervals, sensor_threshold_factor)
+    except:
+        logger.error("Unexpected error:", sys.exc_info()[0])
 
 
 @crython.job(expr=check_scheduler)
