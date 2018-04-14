@@ -214,16 +214,19 @@ def do_measure(sensors):
         validate_measure(sensor)
 
 
-def create_notification(sensors, will_pouring, pouring_intervals):
+def create_notification(sensors, will_pouring, pouring_intervals, status=False):
     tweet_string = 'I measured:\n'
 
     for sensor in sensors:
-        tweet_string += sensor.measure_string + '\n'
+        tweet_string += sensor.measure_string
 
-    if will_pouring:
-        tweet_string += 'I\'ll pour for {:.1f} intervals!'.format(pouring_intervals)
-    else:
-        tweet_string += 'I\'ll not pour!'
+    if not status:
+        tweet_string += '\n'
+
+        if will_pouring:
+            tweet_string += 'I\'ll pour for {:.1f} intervals!'.format(pouring_intervals)
+        else:
+            tweet_string += 'I\'ll not pour!'
 
     if DEBUG:
         print tweet_string
@@ -316,13 +319,17 @@ def morning_support_schedule():
 
 @crython.job(expr=check_scheduler)
 def check_status_schedule():
-    reload_config()
+    try:
+        reload_config()
 
-    sensors = read_sensors_from_config()
-    job_sensors = sensors[:]
+        sensors = read_sensors_from_config()
+        job_sensors = sensors[:]
 
-    # check sensors
-    do_measure(job_sensors)
+        # check sensors
+        do_measure(job_sensors)
+        create_notification(job_sensors, False, 0, status=True)
+    except Exception as e:
+        logger.exception(e)
 
 
 if __name__ == '__main__':
