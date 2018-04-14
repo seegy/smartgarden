@@ -6,6 +6,7 @@ from logging_twitter.handler import TwitterHandler
 import time
 import sys, os
 import uuid
+import threading
 
 pathname = os.path.dirname(sys.argv[0])
 
@@ -22,6 +23,7 @@ def reload_config():
     else:
         Config.read(pathname + '/config.ini.sample')
 
+
 reload_config()
 
 # Logger
@@ -29,7 +31,7 @@ app_name= Config.get('Watering-Server', 'app-name')
 log_level= Config.get('Log', 'level')
 log_file= Config.get('Log', 'file')
 log_format= '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-logging.basicConfig(filename=log_file,level=logging.getLevelName(log_level))
+logging.basicConfig(filename=log_file, level=logging.getLevelName(log_level))
 logger = logging.getLogger(app_name)
 fh = RotatingFileHandler(log_file, maxBytes=10000000, backupCount=5)
 formatter = logging.Formatter(log_format)
@@ -40,7 +42,7 @@ logger.addHandler(fh)
 
 # twitter stuff
 tweet_api = None
-tweet_enabled = bool(Config.get('Twitter', 'enable'))
+tweet_enabled = Config.get('Twitter', 'enable').upper() == 'TRUE'
 
 if tweet_enabled:
     CONSUMER_KEY = Config.get('Twitter', 'CONSUMER_KEY')
@@ -70,3 +72,12 @@ def tweet(msg):
             tweet_api.update_status(msg)
         except Exception,e:
             logger.error("Tweet went wrong: <{}> on tweet <{}> ".format(e, msg))
+
+
+def synchronized(func):
+    func.__lock__ = threading.Lock()
+
+    def synced_func(*args, **kws):
+        with func.__lock__:
+            return func(*args, **kws)
+    return synced_func

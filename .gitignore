@@ -41,3 +41,5 @@ build/
 #NDK
 obj/
 /raspi_scripts/config.ini
+
+*.pyc

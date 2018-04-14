@@ -1,10 +1,9 @@
 import crython
-from random import randint
+from random import randint, uniform
 import requests
 import subprocess
-import grovepi
 import pyowm
-
+import libs.ADC128D818
 from shared import *
 
 DEBUG = False
@@ -15,6 +14,11 @@ class HumiditySensor:
     def __init__(self, pin, threshold):
         self.pin = pin
         self.threshold = threshold
+
+        self.measure = None
+        self.humidity = None
+        self.vote_for_watering = False
+        self.measure_string = None
 
 
 # watering server connection
@@ -27,10 +31,6 @@ evening_watering_job_scheduler = Config.get('Evening-Watering-Schedule', 'wateri
 
 # open weather map connection
 owm_enabled = bool(Config.get('OpenWeatherMap', 'enable'))
-
-
-# global tweet string for multi function level appending
-tweet_string= ''
 
 
 # calculate advice of how many intervals should be poured on delivered temperature
@@ -72,7 +72,7 @@ def get_rain_interval_advice(rain):
 
 
 # asks open weather map for max temperature of current day. if owm is disabled, it always returns 0
-def get_today_weather():
+def get_weather_of_today():
 
     if owm_enabled:
         try:
@@ -87,71 +87,47 @@ def get_today_weather():
 
 
 # read sensors from config
-def get_sensors():
+def read_sensors_from_config(sensor_threshold_factor=1.0):
     sensors = []
 
     for each_section in Config.sections():
         if each_section.startswith('Humidity-Sensor'):
             sensors.append(HumiditySensor(int(Config.get(each_section, 'pin')),
-                                          int(Config.get(each_section, 'threshold'))))
+                                          int(Config.get(each_section, 'threshold')) * sensor_threshold_factor))
     return sensors
 
 
+def get_sensor_mask_by_sensors(sensors):
+    result = 0
+    for sensor in sensors:
+        result += 1 << sensor.pin
+    return result
+
+
 def measure_to_humidity(measure):
-    upper_measure_limit = int(Config.get('Garden-Controller', 'upper-measure-limit'))
-    lower_measure_limit = int(Config.get('Garden-Controller', 'lower-measure-limit'))
+    upper_measure_limit = float(Config.get('Garden-Controller', 'upper-measure-limit'))
+    lower_measure_limit = float(Config.get('Garden-Controller', 'lower-measure-limit'))
     return (float(measure) - lower_measure_limit) / (upper_measure_limit - lower_measure_limit) * 100
 
 
-def check_sensor(sensor, threshold_factor):
-    measure_sum = 0
-    global tweet_string
-    measure_count = int(Config.get('Garden-Controller', 'measure-count'))
-    measure_sleeptime = float(Config.get('Garden-Controller', 'measure-sleeptime'))
-
-    for x in range(0, measure_count):
-
-        # wait between 2 measures
-        if x > 0:
-            time.sleep(measure_sleeptime)
-
-        # read sensor
-
-        measure = None
-        if not DEBUG:
-            measure = grovepi.analogRead(sensor.pin)
-        else:
-            measure = randint((int(Config.get('Garden-Controller', 'upper-measure-limit'))
-                               + int(Config.get('Garden-Controller', 'lower-measure-limit')))/2,
-                              int(Config.get('Garden-Controller', 'upper-measure-limit')))
-        measure_sum += measure
-
-    final_measure = measure_sum / measure_count
-    humidity = measure_to_humidity(final_measure)
-
-    threshold = threshold_factor * float(sensor.threshold)
-    out_string = "P{}, Hum.: {:.1f}/{:.1f}%".format(sensor.pin, humidity, threshold)
-    logger.info(out_string)
-    tweet_string += out_string + '\n'
-    if humidity <= threshold:
-        return True, humidity, threshold
-
-    return False, humidity, threshold
+def validate_measure(sensor):
+    sensor.humidity = measure_to_humidity(sensor.measure)
+    sensor.vote_for_watering = sensor.humidity <= sensor.threshold
+    sensor.measure_string = "P{}, Hum.: {:.1f}/{:.1f}".format(sensor.pin, sensor.humidity, sensor.threshold)
+    logger.info(sensor.measure_string)
 
 
 # delivers the average difference threshold and dryer measures
-def get_avg_hum_diff(sensor_results):
+def get_avg_hum_diff(sensors):
 
-    def func(x, y):
-        torf, hum, thres = y
-        if torf:
-            return x + thres - hum
+    def func(x, sensor):
+        if sensor.vote_for_watering:
+            return x + sensor.threshold - sensor.humidity
         else:
             return x
 
-    sensor_results.insert(0, 0)
-
-    return reduce(func, sensor_results) / len(sensor_results)
+    sensors.insert(0, 0)
+    return reduce(func, sensors) / len(sensors)
 
 
 def get_humidity_advice(avg_diff):
@@ -166,11 +142,11 @@ def get_humidity_advice(avg_diff):
     return ((avg_diff / upper_hum_measure_limit) * (1 - lower_hum_measure_interval_factor)) + lower_hum_measure_interval_factor
 
 
-def get_interval_advice(measures, or_pouring):
+def get_interval_advice(sensors, or_pouring):
 
     if owm_enabled:
         try:
-            weather = get_today_weather()
+            weather = get_weather_of_today()
             temp = weather.get_temperature('celsius')['max']
             rain = weather.get_rain()
 
@@ -178,69 +154,75 @@ def get_interval_advice(measures, or_pouring):
             interval += get_temperature_interval_advice(temp)
             interval += get_rain_interval_advice(rain)
 
-            hum_avg_diff = get_avg_hum_diff(measures)
+            hum_avg_diff = get_avg_hum_diff(sensors)
             hum_factor = get_humidity_advice(hum_avg_diff)
 
             interval *= hum_factor
 
             return interval
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as e:
             if DEBUG:
                 print "no OWM connection!"
+            else:
+                logger.warning("no OWM connection: ", exc_info=True)
 
     return or_pouring
 
 
 def start_watering_server():
-    result = subprocess.Popen(["python", pathname + "/watering_server.py"])
+    subprocess.Popen(["python", pathname + "/watering_server.py"])
 
 
-def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0, with_advice=False):
+def get_random_measure():
+    upper_measure_limit = float(Config.get('Garden-Controller', 'upper-measure-limit'))
+    lower_measure_limit = float(Config.get('Garden-Controller', 'lower-measure-limit'))
+    return uniform((upper_measure_limit + lower_measure_limit)/2, upper_measure_limit)
 
-    pouring_intervals = float(pouring_intervals)
 
-    global tweet_string
-    tweet_string= 'I measured:\n'
+def generate_debug_measures(sensors):
+    result = []
+    for sensor in sensors:
+        result.append([sensor.pin, get_random_measure()])
+    return result
 
-    sensors = get_sensors()
-    job_sensors = sensors[:]
 
-    # make sure there is a quorum
-    if len(job_sensors) % 2 == 0:
-        del job_sensors[randint(0, len(job_sensors) - 1)]
+def merge_sensors_and_measures(sensors, measures):
+    result = []
+    for sensor in sensors:
+        for measure in measures:
+            if sensor.pin == measure[0]:
+                sensor.measure = measure[1]
+                result.append(sensor)
+                break
+    return result
 
+
+@synchronized
+def do_measure(sensors):
     # check sensors
-    measures = []
-    for sensor in job_sensors:
-        d = check_sensor(sensor, sensor_threshold_factor)
-        measures.append(d)
+    sensor_mask = get_sensor_mask_by_sensors(sensors)
 
-    yes_count = len([torf for torf, _, _ in measures if torf])
-
-    if yes_count > len(job_sensors) / 2:
-        logger.info('Yes! Water it!')
-
-        if with_advice:
-            pouring_intervals = get_interval_advice(measures, pouring_intervals)
-
-        tweet_string += 'I\'ll pour for {:.1f} intervals!'.format(pouring_intervals)
-
-        try:
-            url = 'http://{}:{}/pour/{:.2f}'.format(watering_url, watering_port, pouring_intervals)
-            if not DEBUG:
-                requests.put(url)
-                logger.info('Send watering request.')
-            else:
-                print('request to: {}'.format(url))
-
-        except requests.exceptions.ConnectionError:
-            logger.warning("No watering server! restart watering server...")
-            start_watering_server()
-            time.sleep(1)
-            measure_and_watering(pouring_intervals, sensor_threshold_factor)
-
+    if not DEBUG:
+        measure_times = int(Config.get('Garden-Controller', 'measure-count'))
+        measures = libs.ADC128D818.ADC128D818(measure_times=measure_times).read_sensors(sensor_mask)
     else:
-        logger.info('No! No water!')
+        measures = generate_debug_measures(sensors)
+
+    merge_sensors_and_measures(sensors, measures)
+
+    for sensor in sensors:
+        validate_measure(sensor)
+
+
+def create_notification(sensors, will_pouring, pouring_intervals):
+    tweet_string = 'I measured:\n'
+
+    for sensor in sensors:
+        tweet_string += sensor.measure_string + '\n'
+
+    if will_pouring:
+        tweet_string += 'I\'ll pour for {:.1f} intervals!'.format(pouring_intervals)
+    else:
         tweet_string += 'I\'ll not pour!'
 
     if DEBUG:
@@ -249,58 +231,98 @@ def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0, with_ad
         tweet(tweet_string)
 
 
+def send_pour_request(pouring_intervals):
+    try:
+        url = 'http://{}:{}/pour/{:.2f}'.format(watering_url, watering_port, pouring_intervals)
+        if not DEBUG:
+            requests.put(url)
+            logger.info('Send watering request.')
+        else:
+            print('request to: {}'.format(url))
+
+        return True
+
+    except requests.exceptions.ConnectionError:
+        logger.warning("No watering server! restart watering server...")
+        start_watering_server()
+        time.sleep(1)
+
+    return False
+
+
+def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0, with_advice=False):
+
+    pouring_intervals = float(pouring_intervals)
+
+    sensors = read_sensors_from_config(sensor_threshold_factor)
+    job_sensors = sensors[:]  # made new list mutable, TODO should be checked if necessary
+
+    # make sure there is a quorum
+    if len(job_sensors) % 2 == 0:
+        del job_sensors[randint(0, len(job_sensors) - 1)]
+
+    do_measure(job_sensors)
+
+    yes_count = len([True for sensor in job_sensors if sensor.vote_for_watering])
+
+    if yes_count > len(job_sensors) / 2:
+        logger.info('Yes! Water it!')
+
+        if with_advice:
+            pouring_intervals = get_interval_advice(sensor, pouring_intervals)
+
+            create_notification(job_sensors, True, pouring_intervals)
+
+            if not send_pour_request(pouring_intervals):
+                measure_and_watering(pouring_intervals, sensor_threshold_factor)
+
+    else:
+        logger.info('No! No water!')
+        create_notification(job_sensors, False, 0)
+
+
 @crython.job(expr=morning_watering_job_scheduler)
 def morning_schedule():
     try:
         reload_config()
-        pour_intervals= Config.get('Morning-Watering-Schedule', 'watering-pour')
+        pour_intervals = Config.get('Morning-Watering-Schedule', 'watering-pour')
         sensor_threshold_factor = float(Config.get('Morning-Watering-Schedule', 'sensor-threshold-factor'))
         measure_and_watering(pour_intervals, sensor_threshold_factor, True)
-    except:
-        logger.error("Unexpected error:", sys.exc_info()[0])
+    except Exception as e:
+        logger.exception(e)
 
 
 @crython.job(expr=evening_watering_job_scheduler)
 def evening_schedule():
     try:
         reload_config()
-        pour_intervals= Config.get('Evening-Watering-Schedule', 'watering-pour')
+        pour_intervals = Config.get('Evening-Watering-Schedule', 'watering-pour')
         sensor_threshold_factor = float(Config.get('Evening-Watering-Schedule', 'sensor-threshold-factor'))
         measure_and_watering(pour_intervals, sensor_threshold_factor)
-    except:
-        logger.error("Unexpected error:", sys.exc_info()[0])
+    except Exception as e:
+        logger.exception(e)
 
 
 @crython.job(expr=Config.get('Morning-Support-Watering-Schedule', 'watering-scheduler'))
 def morning_support_schedule():
     try:
         reload_config()
-        pour_intervals= Config.get('Morning-Support-Watering-Schedule', 'watering-pour')
+        pour_intervals = Config.get('Morning-Support-Watering-Schedule', 'watering-pour')
         sensor_threshold_factor = float(Config.get('Morning-Support-Watering-Schedule', 'sensor-threshold-factor'))
         measure_and_watering(pour_intervals, sensor_threshold_factor)
-    except:
-        logger.error("Unexpected error:", sys.exc_info()[0])
+    except Exception as e:
+        logger.exception(e)
 
 
 @crython.job(expr=check_scheduler)
 def check_status_schedule():
     reload_config()
-    global tweet_string
-    tweet_string= 'I measured:\n'
 
-    sensors = get_sensors()
+    sensors = read_sensors_from_config()
     job_sensors = sensors[:]
 
     # check sensors
-    decisions = []
-    for sensor in job_sensors:
-        d, _, _ = check_sensor(sensor, 1.0)
-        decisions.append(d)
-
-    if DEBUG:
-        print tweet_string
-    else:
-        tweet(tweet_string)
+    do_measure(job_sensors)
 
 
 if __name__ == '__main__':

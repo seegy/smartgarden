@@ -18,8 +18,8 @@ port = analog
 app-name: Garden-Controller
 measure-count: 50
 measure-sleeptime: 0.01
-upper-measure-limit: 750
-lower-measure-limit: 70
+upper-measure-limit: 50
+lower-measure-limit: 1
 status-schedule: 0 0 11-17 * * * *
 
 [Morning-Watering-Schedule]

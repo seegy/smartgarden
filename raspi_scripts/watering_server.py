@@ -2,7 +2,8 @@
 from flask import Flask
 from werkzeug.routing import FloatConverter as BaseFloatConverter
 import threading
-import grovepi
+import libs.CustomRelay
+
 
 from shared import *
 
@@ -11,22 +12,11 @@ relay_pin = int(Config.get('Watering-Server', 'relay-pin'))
 server_port = int(Config.get('Watering-Server', 'port'))
 
 # configure pins
-grovepi.pinMode(relay_pin, "OUTPUT")
-grovepi.digitalWrite(relay_pin, 0)
+relay = libs.CustomRelay.CustomRelay(relay_pin)
 
 
 class FloatConverter(BaseFloatConverter):
     regex = r'-?\d+(\.\d+)?'
-
-
-def synchronized(func):
-    func.__lock__ = threading.Lock()
-
-    def synced_func(*args, **kws):
-        with func.__lock__:
-            return func(*args, **kws)
-
-    return synced_func
 
 
 @synchronized
@@ -40,23 +30,22 @@ def pour(intervals):
 
     for i in range(0, full_intervals):
         logger.info('start watering')
-        grovepi.digitalWrite(relay_pin, 1)
+        relay.close()
         time.sleep(pour_interval_time)
 
         logger.info('stop watering')
-        grovepi.digitalWrite(relay_pin, 0)
+        relay.open()
         time.sleep(pour_pause_time)
 
     rest_interval= intervals - full_intervals
 
     if rest_interval > 0:
         logger.info('start watering')
-        grovepi.digitalWrite(relay_pin, 1)
+        relay.close()
         time.sleep(rest_interval * pour_interval_time)
 
         logger.info('stop watering')
-        grovepi.digitalWrite(relay_pin, 0)
-        time.sleep(pour_pause_time)
+        relay.open()
 
     tweet("I poured successfully for {} intervals.".format(intervals))
 
