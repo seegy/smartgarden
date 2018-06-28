@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-DIR=`dirname "$BASH_SOURCE"`
+DIR=$(dirname "$0")
 
 python ${DIR}/garden-controller.py

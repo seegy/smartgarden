@@ -7,6 +7,8 @@ import libs.ADC128D818
 from shared import *
 
 DEBUG = False
+SENSOR_DEBUG = False
+POUR_ANYWAY = False
 
 
 # class for sensors
@@ -24,10 +26,6 @@ class HumiditySensor:
 # watering server connection
 watering_url = Config.get('Watering-Server', 'url')
 watering_port = Config.get('Watering-Server', 'port')
-check_scheduler = Config.get('Garden-Controller', 'status-schedule')
-
-morning_watering_job_scheduler = Config.get('Morning-Watering-Schedule', 'watering-scheduler')
-evening_watering_job_scheduler = Config.get('Evening-Watering-Schedule', 'watering-scheduler')
 
 # open weather map connection
 owm_enabled = bool(Config.get('OpenWeatherMap', 'enable'))
@@ -77,10 +75,21 @@ def get_weather_of_today():
     if owm_enabled:
         try:
             access_token = Config.get('OpenWeatherMap', 'TOKEN')
+            location = Config.get('OpenWeatherMap', 'location')
             owm = pyowm.OWM(access_token)
-            forecast = owm.daily_forecast(Config.get('OpenWeatherMap', 'location'))
+
+            if DEBUG:
+                print 'location: ' + location
+
+            forecast = owm.daily_forecast(location, limit=1)
+
+            if DEBUG:
+                print 'Result of OWM call:'
+                print forecast
+
             return forecast.get_forecast().get(0)
-        except Exception:
+        except Exception as e:
+            logger.exception(e)
             raise requests.exceptions.ConnectionError("no OWM connection!")
 
     return 0
@@ -119,6 +128,7 @@ def validate_measure(sensor):
 
 # delivers the average difference threshold and dryer measures
 def get_avg_hum_diff(sensors):
+    tmp_sensors = sensors[:] # new list
 
     def func(x, sensor):
         if sensor.vote_for_watering:
@@ -126,8 +136,8 @@ def get_avg_hum_diff(sensors):
         else:
             return x
 
-    sensors.insert(0, 0)
-    return reduce(func, sensors) / len(sensors)
+    tmp_sensors.insert(0, 0)
+    return reduce(func, tmp_sensors) / len(tmp_sensors)
 
 
 def get_humidity_advice(avg_diff):
@@ -202,7 +212,7 @@ def do_measure(sensors):
     # check sensors
     sensor_mask = get_sensor_mask_by_sensors(sensors)
 
-    if not DEBUG:
+    if not SENSOR_DEBUG:
         measure_times = int(Config.get('Garden-Controller', 'measure-count'))
         measures = libs.ADC128D818.ADC128D818(measure_times=measure_times).read_sensors(sensor_mask)
     else:
@@ -218,7 +228,7 @@ def create_notification(sensors, will_pouring, pouring_intervals, status=False):
     tweet_string = 'I measured:\n'
 
     for sensor in sensors:
-        tweet_string += sensor.measure_string
+        tweet_string += sensor.measure_string + '\n'
 
     if not status:
         tweet_string += '\n'
@@ -268,23 +278,23 @@ def measure_and_watering(pouring_intervals, sensor_threshold_factor=1.0, with_ad
 
     yes_count = len([True for sensor in job_sensors if sensor.vote_for_watering])
 
-    if yes_count > len(job_sensors) / 2:
+    if POUR_ANYWAY or yes_count > len(job_sensors) / 2:
         logger.info('Yes! Water it!')
 
         if with_advice:
-            pouring_intervals = get_interval_advice(sensor, pouring_intervals)
+            pouring_intervals = get_interval_advice(job_sensors, pouring_intervals)
 
-            create_notification(job_sensors, True, pouring_intervals)
+        create_notification(job_sensors, True, pouring_intervals)
 
-            if not send_pour_request(pouring_intervals):
-                measure_and_watering(pouring_intervals, sensor_threshold_factor)
+        if not send_pour_request(pouring_intervals):
+            measure_and_watering(pouring_intervals, sensor_threshold_factor)
 
     else:
         logger.info('No! No water!')
         create_notification(job_sensors, False, 0)
 
 
-@crython.job(expr=morning_watering_job_scheduler)
+@crython.job(expr=Config.get('Morning-Watering-Schedule', 'watering-scheduler'))
 def morning_schedule():
     try:
         reload_config()
@@ -295,7 +305,7 @@ def morning_schedule():
         logger.exception(e)
 
 
-@crython.job(expr=evening_watering_job_scheduler)
+@crython.job(expr=Config.get('Evening-Watering-Schedule', 'watering-scheduler'))
 def evening_schedule():
     try:
         reload_config()
@@ -317,7 +327,7 @@ def morning_support_schedule():
         logger.exception(e)
 
 
-@crython.job(expr=check_scheduler)
+@crython.job(expr=Config.get('Garden-Controller', 'status-schedule'))
 def check_status_schedule():
     try:
         reload_config()
@@ -354,7 +364,9 @@ if __name__ == '__main__':
 
     crython.start()
 
-    logger.info("Garden Controller started up! Morning schedule: {}. Evening schedule: {}".format(morning_watering_job_scheduler, evening_watering_job_scheduler))
+    logger.info("Garden Controller started up! Morning schedule: {}. Evening schedule: {}".format(
+        Config.get('Morning-Watering-Schedule', 'watering-scheduler'),
+        Config.get('Evening-Watering-Schedule', 'watering-scheduler')))
 
     if DEBUG:
         print "I'm up now!"
