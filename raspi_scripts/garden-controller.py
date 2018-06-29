@@ -71,26 +71,30 @@ def get_rain_interval_advice(rain):
 
 # asks open weather map for max temperature of current day. if owm is disabled, it always returns 0
 def get_weather_of_today():
+    max_own_request_tries = int(Config.get('OpenWeatherMap', 'max_own_request_tries'))
 
     if owm_enabled:
-        try:
-            access_token = Config.get('OpenWeatherMap', 'TOKEN')
-            location = Config.get('OpenWeatherMap', 'location')
-            owm = pyowm.OWM(access_token)
+        for x in xrange(max_own_request_tries):
+            try:
+                access_token = Config.get('OpenWeatherMap', 'TOKEN')
+                location = Config.get('OpenWeatherMap', 'location')
+                owm = pyowm.OWM(access_token)
 
-            if DEBUG:
-                print 'location: ' + location
+                if DEBUG:
+                    print 'location: ' + location
 
-            forecast = owm.daily_forecast(location, limit=1)
+                forecast = owm.daily_forecast(location, limit=1)
 
-            if DEBUG:
-                print 'Result of OWM call:'
-                print forecast
+                if DEBUG:
+                    print 'Result of OWM call:'
+                    print forecast
 
-            return forecast.get_forecast().get(0)
-        except Exception as e:
-            logger.exception(e)
-            raise requests.exceptions.ConnectionError("no OWM connection!")
+                return forecast.get_forecast().get(0)
+            except Exception as e:
+                logger.exception(e)
+
+                if x == max_own_request_tries - 1:
+                    raise requests.exceptions.ConnectionError("no OWM connection!")
 
     return 0
 

@@ -1,59 +1,53 @@
 [Humidity-Sensor1]
 pin = 0
-threshold = 50
-port = analog
+threshold = 60
 
 [Humidity-Sensor2]
 pin = 1
-threshold = 50
-port = analog
+threshold = 60
 
 [Humidity-Sensor3]
 pin = 2
-threshold = 50
-port = analog
+threshold = 70
 
 
 [Garden-Controller]
 app-name: Garden-Controller
-measure-count: 50
+measure-count: 5
 measure-sleeptime: 0.01
-upper-measure-limit: 50
-lower-measure-limit: 1
-status-schedule: 0 0 11-17 * * * *
+upper-measure-limit: 50.0
+lower-measure-limit: 0.0
+status-schedule: 0 0 10-17 * * * *
+#status-schedule: */5 * * * * * *
 
 [Morning-Watering-Schedule]
-watering-pour: 3.0
-# for DEV
-# every 5 seconds
+watering-pour: 4.5
+#watering-pour: 0.01
 #watering-scheduler = */5 * * * * * *
+watering-scheduler = 0 0 6 * * * *
 sensor-threshold-factor = 1.0
-
-# for PROD
-# every 30 minutes in the morning and evening
-watering-scheduler = 0 0,30 6-10 * * * *
 
 [Morning-Support-Watering-Schedule]
 watering-pour: 0.5
 watering-scheduler = 0 0,30 7-9 * * * *
-sensor-threshold-factor = 0.9
+sensor-threshold-factor = 0.8
+#watering-scheduler = */2 * * * * * *
 
 [Evening-Watering-Schedule]
-watering-pour: 1.0
-watering-scheduler = 0 0,30 18-21 * * * *
-sensor-threshold-factor = 0.8
+watering-pour: 0.5
+watering-scheduler = 0 0,30 18-20 * * * *
+sensor-threshold-factor = 0.65
+#watering-scheduler = */2 * * * * * *
 
 
 [Watering-Server]
 app-name: Watering-Server
 port: 5000
 url: localhost
-relay-pin: 2
-
+relay-pin: 26
 # for DEV
 #pour_interval_time: 2
 #pour_pause_time: 1
-
 # for PROD
 pour_interval_time: 60
 pour_pause_time: 2
@@ -72,17 +66,19 @@ enable: false
 #ACCESS_KEY: '1234abcd...'#keep the quotes, replace this with your access token
 #ACCESS_SECRET: '1234abcd...'#keep the quotes, replace this with your access token secret
 
+
 [OpenWeatherMap]
 enable: false
 #TOKEN: '1234abcd...'#keep the quotes, replace this with your consumer key
 #location: 'Berlin,de'
 lower_env_temp_limit: 10.0
 upper_env_temp_limit: 40.0
-initial_value: 1.5
-max_intervals: 4.0
-min_intervals: 1.2
+initial_value: 2.5
+max_intervals: 5.5
+min_intervals: 0.5
 rain_pour_deduction_limit: -1.0
 upper_env_rain_limit: 20
 lower_env_rain_limit: 1.5
 upper_hum_measure_limit: 70
-lower_hum_measure_interval_factor: 0.4
+lower_hum_measure_interval_factor: 0.6
+max_own_request_tries: 5
